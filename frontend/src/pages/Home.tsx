@@ -9,6 +9,10 @@ export default function Home() {
     const [posts, setPosts] = useState([]);
     const [postId, setPostId] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
+    const [showPostMenu, setShowPostMenu] = useState({
+        enabled: false,
+        postId: null
+    });
     const [filters, setFilters] = useState({
         date: '',
         source: '',
@@ -124,11 +128,14 @@ export default function Home() {
             <Navbar user={user} onLogout={onLogout} />
             <div className="flex flex-col justify-center items-center min-h-screen bg-gray-100"
                 style={{
-                    backgroundImage: `url('https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0')`,
+                    backgroundImage: `url('https://images.unsplash.com/photo-1483375801503-374c5f660610')`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                 }}
             >
+                <h1 className="text-5xl font-bold text-center text-white p-4 w-1/2 mb-3">
+                    Want to send a package? Don't worry, we got you covered!
+                </h1>
                 <input type="text" placeholder="Search for trips" className="w-1/2 p-2 border rounded-md" />
                 {user?.role === "seller" && (
                     <div className="flex flex-col justify-center items-center">
@@ -185,52 +192,70 @@ export default function Home() {
                 </div>
             </div>
             {filteredPosts.length === 0 && <h1 className="text-2xl font-bold text-center mt-4">No posts found</h1>}
-            <div className='grid grid-cols-3 gap-4 p-4 w-100'>
-
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-6 w-full'>
                 {
                     filteredPosts.map(post => (
-                        <div key={post.id} className="shadow-md w-fullitems-center rounded-xl">
-                            <div className="flex my-2 justify-start items-center p-3 bg-gray-300">
-                                <img src={post.author_pfp} alt="Trip" className="w-10 h-10 object-fit rounded-full" />
-                                <h3 className='ml-2'>{post.author}</h3>
-                                
+                        <div key={post.id} className="shadow-lg rounded-lg overflow-hidden transition-transform transform hover:scale-105 bg-white">
+                            <div className="flex items-center justify-between p-4 bg-gray-100">
+                                <div className="flex items-center">
+                                    <img src={post.author_pfp} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
+                                    <h3 className='ml-4 font-semibold'>{post.author}</h3>
+                                </div>
+                                <div className="relative">
+                                    <span className='font-extrabold text-gray-500 cursor-pointer' onClick={() => {
+                                        setShowPostMenu({
+                                            enabled: !showPostMenu.enabled,
+                                            postId: post.id
+                                        })
+                                    }}>...</span>
+                                    {showPostMenu.enabled && showPostMenu.postId === post.id && (
+                                        <div className="absolute right-0 top-8 bg-white shadow-lg rounded-md py-2 z-10">
+                                            <button className="block text-blue-500 px-4 py-1 hover:bg-gray-200 w-full text-left">Report</button>
+                                            {user && user.id === post.user_id && (
+                                                <>
+                                                    <button className="block text-red-500 px-4 py-1 hover:bg-gray-200 w-full text-left" onClick={() => handleDeletePost(post.id)}>Delete</button>
+                                                    <button className="block text-gray-500 px-4 py-1 hover:bg-gray-200 w-full text-left" onClick={() => handleEditPost(post.id)}>Edit</button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="p-4">
-                            <h1 className="text-3xl font-bold">{post.title}</h1>
-                            <p className="text-lg mt-3 text-gray-500">{post.description}</p>
-                            <div className='mt-3 w-100'>
-                                <div className="flex justify-between items-center w-100 ">
-                                    <div>
-                                        <h3>Departure</h3>
-                                        <p>{post.source}</p>
+                            <div className="p-6">
+                                <h1 className="text-xl font-bold text-gray-900">{post.title}</h1>
+                                <p className="text-gray-600 mt-2">{post.description}</p>
+                                <div className='mt-4'>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div>
+                                            <h4 className="font-semibold text-gray-800">Departure:</h4>
+                                            <p className="text-gray-500">{post.source}</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold text-gray-800">Arrival:</h4>
+                                            <p className="text-gray-500">{post.destination}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3>Arrival</h3>
-                                        <p>{post.destination}</p>
+                                    <div className="flex justify-between items-center text-gray-600">
+                                        <h4>Space: {post.space}kg</h4>
+                                        <h4>Date: {post.date}</h4>
                                     </div>
                                 </div>
-                                <div className='flex justify-between items-center'>
-                                    <h3>Space: {post.space}kg</h3>
-                                    <h4>Date: {post.date}</h4>
-                                </div>
-                                <button className="bg-blue-500 text-white px-4 py-2 rounded-md mt-4">Contact user</button>
-                                {user && post?.user_id === user?.id && (
-                                    <div className="flex justify-between mt-2">
-                                        <button onClick={() => handleEditPost(post.id)} className="text-blue-500">Edit</button>
-                                        <button onClick={() => handleDeletePost(post.id)} className="text-red-500">Delete</button>
-                                    </div>
-                                )}
-                            </div>
+                                <button className={`w-full bg-blue-500 text-white py-2 rounded mt-4 ${post.author === user?.full_name ? 'cursor-not-allowed bg-gray-400' : ''}`}
+                                    disabled={post.author === user?.full_name}>
+                                    {post.author === user?.full_name ? 'Your Post' : 'Contact'}
+                                </button>
                             </div>
                         </div>
-                    ))}
+                    ))
+                }
             </div>
+
 
             <PostModal
                 isOpen={modalOpen}
                 onClose={() => {
-                    setPostId(null)
                     setModalOpen(false)
+                    setPostId(null)
                 }}
                 onPostCreated={handlePostCreate}
                 postToEdit={posts.find(post => post.id === postId)}

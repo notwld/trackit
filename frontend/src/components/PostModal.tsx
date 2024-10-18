@@ -21,7 +21,7 @@ const PostModal = ({ isOpen, onClose, onPostCreate, postToEdit }) => {
         });
 
         if (response.ok) {
-            onPostCreate(); // Refresh posts after creation
+            onPostCreate(); 
             setTitle('');
             setDescription('');
             setSource('');
