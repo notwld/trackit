@@ -8,7 +8,7 @@ from flask_cors import CORS
 from datetime import timedelta
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
@@ -101,13 +101,27 @@ def get_profile():
     current_user = get_jwt_identity()
     user = User.query.filter_by(email=current_user).first()
     profile_pic_url = f"http://127.0.0.1:5000/uploads/{user.profile_pic}" if user.profile_pic else None
+    posts = []
+    for post in user.posts:
+        posts.append({
+            'id': post.id,
+            'title': post.title,
+            'description': post.description,
+            'source': post.source,
+            'destination': post.destination,
+            'space': post.space,
+            'date': post.date.strftime('%Y-%m-%d'),
+            'author': user.full_name,
+            'profile_pic': profile_pic_url
+        })
     if user:
         return jsonify({
             'id': user.id,
             'full_name': user.full_name,
             'email': user.email,
             'profile_pic': profile_pic_url,
-            'role': user.role
+            'role': user.role,
+            'posts': posts
         }), 200
     else:
         return jsonify({'error': 'User not found'}), 404
@@ -232,7 +246,7 @@ def get_posts():
     return jsonify(post_list), 200
 
 # Get sepecific user posts
-@app.route('/posts/:user_id', methods=['GET'])
+@app.route('/posts/user/:user_id', methods=['GET'])
 @jwt_required()
 def get_user_posts(user_id):
     post_list = []

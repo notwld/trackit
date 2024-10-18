@@ -22,7 +22,7 @@ const Login = () => {
       // Save token and authenticate
       localStorage.setItem('token',data.access_token);
       console.log(data);
-      if(data.role=='user'||data.role!='seller'||data.role!='buyer'){
+      if(data.role=='user'){
         navigate('/role_selection');
         return
       }
