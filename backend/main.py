@@ -289,7 +289,8 @@ def update_post(post_id):
     post.source = request.json.get('source', post.source)
     post.destination = request.json.get('destination', post.destination)
     post.space = request.json.get('space', post.space)
-    post.date = request.json.get('date', post.date)
+    date_obj = datetime.strptime(str(post.date), '%Y-%m-%d').date()
+    post.date = date_obj
 
     db.session.commit()
 
@@ -352,8 +353,11 @@ def create_contact():
             return jsonify({'error': 'Contact already exists'}), 400
         
         new_contact = Contact(user_id=user_id, contact_user_id=contact_user_id)
+        recipient = Contact(user_id=contact_user_id, contact_user_id=user_id)
+
         
         db.session.add(new_contact)
+        db.session.add(recipient)
         db.session.commit()
         
         return jsonify({'message': 'Contact created successfully!'}), 201

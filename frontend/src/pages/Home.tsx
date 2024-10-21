@@ -43,7 +43,7 @@ export default function Home() {
                     const data = await response.json();
                     setUser(data);
                     localStorage.setItem('user', JSON.stringify(data));
-                    fetchPosts(data.id); // Fetch posts after setting user
+                    fetchPosts(data.id); 
                 } else {
                     const errorData = await response.json();
                     setError(errorData.error || 'Failed to fetch user info');
@@ -74,7 +74,7 @@ export default function Home() {
     };
 
     const handlePostCreate = () => {
-        fetchPosts(user.id); // Refresh posts after creating a new one
+        fetchPosts(user.id);
     };
 
     const onLogout = () => {
@@ -89,10 +89,13 @@ export default function Home() {
         if (postToEdit) {
             setPostId(postId);
             setModalOpen(true);
+
         }
     };
 
     const handleDeletePost = async (postId) => {
+        const choice = window.confirm('Are you sure you want to delete this post?');
+        if (!choice) return;
         const token = localStorage.getItem('token');
         const response = await fetch(`http://127.0.0.1:5000/posts/${postId}`, {
             method: 'DELETE',
@@ -293,7 +296,7 @@ export default function Home() {
                     setModalOpen(false)
                     setPostId(null)
                 }}
-                onPostCreated={handlePostCreate}
+                onPostCreate={handlePostCreate}
                 postToEdit={posts.find(post => post.id === postId)}
             />
         </div>

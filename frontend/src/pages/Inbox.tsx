@@ -4,10 +4,10 @@ import { app, database } from "../config/firebase";
 import { collection, onSnapshot, addDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
 
 export default function Inbox() {
-    const { user_id, contact_id } = useParams();
+    // const { user_id, contact_id } = useParams();
     const [contacts, setContacts] = useState([]);
     const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState(""); // State for the new message
+    const [newMessage, setNewMessage] = useState("");
     const [user, setUser] = useState(null);
     const navigate = useNavigate();
     const [contactMenu, setContactMenu] = useState({
@@ -18,11 +18,7 @@ export default function Inbox() {
 
     useEffect(() => {
         setUser(JSON.parse(localStorage.getItem('user')));
-        if (user_id && contact_id) {
-            const filteredContact = contacts.find((contact) => contact.id === contact_id);
-            setSelectedContact(filteredContact);
-            // fetchMessages(selectedContact.id);
-        }
+
 
         const fetchContacts = async () => {
             const token = localStorage.getItem('token');
@@ -42,38 +38,60 @@ export default function Inbox() {
                 // Firebase collection reference
                 const contactsRef = collection(database, "contacts");
 
-                // // Add contacts to Firebase (same logic you had before)
-                // for (const contact of data) {
-                //     const q = query(contactsRef, where("id", "==", contact.id));
-                //     const querySnapshot = await getDocs(q);
+                // Add contacts to Firebase (same logic you had before)
+                for (const contact of data) {
+                    const q = query(contactsRef, where("id", "==", contact.id));
+                    const querySnapshot = await getDocs(q);
 
-                //     if (querySnapshot.empty) {
-                //         await addDoc(contactsRef, {
-                //             id: contact.id,
-                //             contact_user: contact.contact_user,
-                //             contact_user_pfp: contact.contact_user_pfp
-                //         });
-                //     }
-                // }
+                    console.log(querySnapshot.docs);
+
+                    if (querySnapshot.empty) {
+                        await addDoc(contactsRef, {
+                            id: contact.id,
+                            sender: contact.sender,
+                            receiver: contact.receiver,
+                            sender_pfp: contact.sender_pfp,
+                            receiver_pfp: contact.receiver_pfp,
+                            sender_id: contact.sender_id,
+                            receiver_id: contact.receiver_id,
+
+                        }).then(() => {
+                            console.log("Document successfully written!");
+                        }
+                        ).catch((error) => {
+                            console.error("Error writing document: ", error);
+                        });
+                    }
+                }
 
                 setSelectedContact(data[0]);
             }
-        };
+        }
 
         fetchContacts();
-    }, [user_id, contact_id]);
-    // Fetch messages from Firebase when contact is selected
-    const fetchMessages = async (contactId) => {
+    }, []);
+    const fetchMessages = (contactId) => {
         const messagesRef = collection(database, "messages");
-        const q = query(messagesRef, where("contact_id", "==", contactId), orderBy("timestamp", "asc"));
-        onSnapshot(q, (snapshot) => {
+        const snapshot = getDocs(messagesRef);
+        console.log(snapshot);
+        const q = query(messagesRef,
+            orderBy("timestamp", "asc"),
+            where("receiver", "==", contactId),
+        );
+
+        // Real-time update of messages
+        const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetchedMessages = snapshot.docs.map((doc) => ({
                 id: doc.id,
                 ...doc.data()
             }));
             setMessages(fetchedMessages);
         });
+
+        return unsubscribe;
     };
+
+
     const deleteContact = async (contactId) => {
         const choice = window.confirm("Are you sure you want to delete this contact?");
         if (choice) {
@@ -98,21 +116,20 @@ export default function Inbox() {
     }
 
 
-    // Send a new message
     const sendMessage = async () => {
-        if (newMessage.trim() === "") return; // Don't send empty messages
+        if (newMessage.trim() === "") return;
 
         const messagesRef = collection(database, "messages");
         await addDoc(messagesRef, {
-            contact_id: selectedContact.id,
-            user_id: user.id,
-            message: newMessage,
+            sender: user.id,
+            receiver: selectedContact.receiver_id,
+            content: newMessage,
             timestamp: new Date(),
         });
 
-        setNewMessage(""); // Clear the input after sending
-        fetchMessages(selectedContact.id); // Fetch messages again to display the new message
+        setNewMessage(""); 
     };
+
 
     return (
         <div className="h-screen w-full bg-gray-50 p-6 flex">
@@ -123,19 +140,20 @@ export default function Inbox() {
                     {contacts.length === 0 ? (
                         <p className="text-center text-gray-500">No contacts available.</p>
                     ) : (
-                        contacts.length>0&& contacts.map((contact) => (
-                            <div 
-                                key={contact.id} 
+                        contacts.length > 0 && contacts.map((contact) => (
+                            <div
+                                key={contact.id}
                                 className={`bg-white w-full shadow-md rounded-lg mb-4 cursor-pointer ${selectedContact?.id === contact.id ? 'ring-2 ring-blue-400' : ''}`}
                                 onClick={() => {
-                                    navigate(`/inbox/${user.id}/${contact.id}`);
+                                    setSelectedContact(contact);
+                                    fetchMessages(contact.receiver_id);
                                 }}
                             >
                                 <div className="flex items-center justify-between p-4">
                                     <div className="flex items-center">
-                                        <img src={`${contact.receiver==user.full_name?contact.sender_pfp:contact.receiver_pfp}`} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
+                                        <img src={`${contact.receiver == user.full_name ? contact.sender_pfp : contact.receiver_pfp}`} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
                                         <div className="ml-4">
-                                            <h1 className="font-semibold text-gray-800">{contact.receiver==user.full_name?contact.sender:contact.receiver}</h1>
+                                            <h1 className="font-semibold text-gray-800">{contact.receiver == user.full_name ? contact.sender : contact.receiver}</h1>
                                         </div>
                                     </div>
                                     <div className="relative">
@@ -159,7 +177,7 @@ export default function Inbox() {
                                             </div>
                                         )}
                                     </div>
-                                
+
                                 </div>
                             </div>
                         ))
@@ -174,8 +192,8 @@ export default function Inbox() {
                         <div>
                             <div className="text-2xl font-bold mb-4 bg-gray-100 px-4 py-6">
                                 <div className="flex items-center">
-                                    <img src={`${selectedContact.receiver==user.full_name?selectedContact.sender_pfp:selectedContact.receiver_pfp}`} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
-                                    <h1 className="font-semibold text-gray-800 ml-4">{selectedContact.receiver==user.full_name?selectedContact.sender:selectedContact.receiver}</h1>
+                                    <img src={`${selectedContact.receiver == user.full_name ? selectedContact.sender_pfp : selectedContact.receiver_pfp}`} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
+                                    <h1 className="font-semibold text-gray-800 ml-4">{selectedContact.receiver == user.full_name ? selectedContact.sender : selectedContact.receiver}</h1>
                                 </div>
                             </div>
 
@@ -184,9 +202,8 @@ export default function Inbox() {
                                 {messages.map((msg) => (
                                     <div
                                         key={msg.id}
-                                        className={`${
-                                            msg.user_id === user.id ? "self-end bg-blue-500 text-white" : "self-start bg-gray-200"
-                                        } p-3 rounded-md max-w-xs`}
+                                        className={`${msg.user_id === user.id ? "self-end bg-blue-500 text-white" : "self-start bg-gray-200"
+                                            } p-3 rounded-md max-w-xs`}
                                     >
                                         <p>{msg.message}</p>
                                     </div>
@@ -196,13 +213,13 @@ export default function Inbox() {
 
                         {/* Textarea for sending message */}
                         <div className="flex mt-6 p-4">
-                            <textarea 
-                                className="flex-1 p-2 border rounded" 
-                                placeholder="Type a message..." 
-                                value={newMessage} 
-                                onChange={(e) => setNewMessage(e.target.value)} 
+                            <textarea
+                                className="flex-1 p-2 border rounded"
+                                placeholder="Type a message..."
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
                             />
-                            <button 
+                            <button
                                 className="bg-blue-500 text-white px-4 py-2 rounded ml-2"
                                 onClick={sendMessage}
                             >
