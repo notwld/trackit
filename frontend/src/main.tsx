@@ -21,11 +21,11 @@ const router = createBrowserRouter([
     children: [
       {
         path: "login",
-        element: <Login />,  // Context will provide setIsAuthenticated inside Login.jsx
+        element: <Login />, 
       },
       {
         path: "signup",
-        element: <Signup />,  // Context will provide setIsAuthenticated inside Signup.jsx
+        element: <Signup />,  
       },
       {
         path: "role_selection",
@@ -45,6 +45,14 @@ const router = createBrowserRouter([
       },
       {
         path: "inbox",
+        element: (
+          <ProtectedRoute>
+            <Inbox />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "inbox/:user_id/:contact_id",
         element: (
           <ProtectedRoute>
             <Inbox />

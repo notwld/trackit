@@ -8,6 +8,7 @@ export default function Home() {
     const [error, setError] = useState('');
     const [posts, setPosts] = useState([]);
     const [postId, setPostId] = useState(null);
+    const [message, setMessage] = useState('');
     const [modalOpen, setModalOpen] = useState(false);
     const [showPostMenu, setShowPostMenu] = useState({
         enabled: false,
@@ -41,6 +42,7 @@ export default function Home() {
                 if (response.ok) {
                     const data = await response.json();
                     setUser(data);
+                    localStorage.setItem('user', JSON.stringify(data));
                     fetchPosts(data.id); // Fetch posts after setting user
                 } else {
                     const errorData = await response.json();
@@ -101,7 +103,7 @@ export default function Home() {
         });
 
         if (response.ok) {
-            fetchPosts(user.id); // Refresh posts after deletion
+            fetchPosts(user.id);
         }
     };
 
@@ -122,6 +124,36 @@ export default function Home() {
             [id]: value,
         }));
     };
+
+    const handleContact = async (post) => {
+
+
+        const token = localStorage.getItem('token');
+        const response = await fetch('http://127.0.0.1:5000/contact', {
+            method: 'POST',
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                user_id: user.id,
+                contact_user_id: post.user_id,
+            })
+
+        });
+        console.log(response);
+        if (response.ok) {
+            const data = await response.json();
+            navigate( `/inbox/${user.id}/${post.user_id}`);
+
+        }
+        else{
+            const errorData = await response.json();
+            alert(errorData.error || 'Failed to contact user');
+            navigate('/inbox');
+        }
+
+    }
 
     return (
         <div>
@@ -241,9 +273,13 @@ export default function Home() {
                                     </div>
                                 </div>
                                 <button className={`w-full bg-blue-500 text-white py-2 rounded mt-4 ${post.author === user?.full_name ? 'cursor-not-allowed bg-gray-400' : ''}`}
-                                    disabled={post.author === user?.full_name}>
+                                   onClick={() => handleContact(post)}>
                                     {post.author === user?.full_name ? 'Your Post' : 'Contact'}
                                 </button>
+                                {/* <button className={`w-full bg-blue-500 text-white py-2 rounded mt-4 ${post.author === user?.full_name ? 'cursor-not-allowed bg-gray-400' : ''}`}
+                                    disabled={post.author === user?.full_name} onClick={() => handleContact(post)}>
+                                    {post.author === user?.full_name ? 'Your Post' : 'Contact'}
+                                </button> */}
                             </div>
                         </div>
                     ))

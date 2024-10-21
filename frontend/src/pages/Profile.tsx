@@ -173,13 +173,17 @@ const Profile = () => {
                        />
                    </div>
                    <div className="mb-4">
-                       <label className="block mb-1">Role</label>
+                       {/* <label className="block mb-1">Role</label>
                        <input
                            type="text"
                            value={role}
                            className="w-full px-3 py-2 border rounded"
                            disabled
-                       />
+                       /> */}
+                       <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 border rounded">
+                            <option value="buyer">Buyer</option>
+                            <option value="seller">Seller</option>
+                        </select>
                    </div>
                    <div className="mb-4">
                        <label className="block mb-1">New Password</label>

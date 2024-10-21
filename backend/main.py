@@ -2,7 +2,7 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from models import db, User,Post, bcrypt
+from models import db, User,Post, bcrypt,Contact,Conversation,Message
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from datetime import timedelta
@@ -13,10 +13,9 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), "backend",'uploads')
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max upload size: 16MB
-app.config['JWT_SECRET_KEY'] = 'super-secret-key'  # Change this to a strong secret key
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)  # Set token expiration
-
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  #16MB
+app.config['JWT_SECRET_KEY'] = 'super-secret-key'  
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)  
 # Initialize extensions
 db.init_app(app)
 jwt = JWTManager(app)
@@ -315,5 +314,118 @@ def delete_post(post_id):
     db.session.commit()
 
     return jsonify({'message': 'Post deleted successfully'}), 200
+
+@app.route('/posts/<int:post_id>', methods=['GET'])
+@jwt_required()
+def get_post(post_id):
+    post = Post.query.filter_by(id=post_id).first()
+    if post:
+        author = User.query.filter_by(id=post.user_id).first()
+        profile_pic_url = f"http://127.0.0.1:5000/uploads/{author.profile_pic}" if author.profile_pic else None
+        return jsonify({
+            'id': post.id,
+            'title': post.title,
+            'description': post.description,
+            'source': post.source,
+            'destination': post.destination,
+            'space': post.space,
+            'date': post.date.strftime('%Y-%m-%d'),
+            'user_id': post.user_id,
+            'author': author.full_name,
+            'author_pfp': profile_pic_url
+        }), 200
+
+
+    if not post:
+        return jsonify({'error': 'Post not found'}), 404
+    
+@app.route('/contact', methods=['POST'])
+@jwt_required()
+def create_contact():
+    data = request.json
+    print(data)
+    try:
+        user_id = data['user_id']
+        contact_user_id = data['contact_user_id']
+        existing_contact = Contact.query.filter_by(user_id=user_id, contact_user_id=contact_user_id).first()
+        if existing_contact:
+            return jsonify({'error': 'Contact already exists'}), 400
+        
+        new_contact = Contact(user_id=user_id, contact_user_id=contact_user_id)
+        
+        db.session.add(new_contact)
+        db.session.commit()
+        
+        return jsonify({'message': 'Contact created successfully!'}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    
+# @app.route('/contacts', methods=['GET'])
+# @jwt_required()
+# def get_contacts():
+#     contact_list = []
+#     user = User.query.filter_by(email=get_jwt_identity()).first()
+#     contacts = Contact.query().filter_by(user_id=user.id).all()
+#     for contact in contacts:
+#         sender = User.query.filter_by(id=contact.user_id).first()
+#         receiver = User.query.filter_by(id=contact.contact_user_id).first()
+#         sender_profile_pic_url = f"http://127.0.0.1:5000/uploads/{sender.profile_pic}" if sender.profile_pic else None
+#         receiver_profile_pic_url = f"http://127.0.0.1:5000/uploads/{receiver.profile_pic}" if receiver.profile_pic else None
+        
+#         contact_list.append({
+#             'id': contact.id,
+#             'sender_id': contact.user_id,
+#             'receiver_id': contact.contact_user_id,
+#             'sender': sender.full_name,
+#             'receiver': receiver.full_name,
+#             'sender_pfp': sender_profile_pic_url,
+#             'receiver_pfp': receiver_profile_pic_url
+#         })
+#     return jsonify(contact_list), 200
+
+@app.route('/contacts/user/<user_id>', methods=['GET'])
+@jwt_required()
+def get_user_contacts(user_id):
+    contacts = Contact.query.filter_by(user_id=user_id).all()
+    if contacts:
+        contact_list = []
+        for contact in contacts:
+            sender = User.query.filter_by(id=contact.user_id).first()
+            receiver = User.query.filter_by(id=contact.contact_user_id).first()
+            sender_profile_pic_url = f"http://127.0.0.1:5000/uploads/{sender.profile_pic}" if sender.profile_pic else None
+            receiver_profile_pic_url = f"http://127.0.0.1:5000/uploads/{receiver.profile_pic}" if receiver.profile_pic else None
+            contact_list.append({
+                'id': contact.id,
+                'sender_id': contact.user_id,
+                'receiver_id': contact.contact_user_id,
+                'sender': sender.full_name,
+                'receiver': receiver.full_name,
+                'sender_pfp': sender_profile_pic_url,
+                'receiver_pfp': receiver_profile_pic_url
+            })
+        return jsonify(contact_list), 200
+    if not contacts:
+        return jsonify({'error': 'Contact not found'}), 404
+
+@app.route('/contacts/<int:contact_id>', methods=['DELETE'])
+@jwt_required()
+def delete_contact(contact_id):
+    current_user = get_jwt_identity()
+    user = User.query.filter_by(email=current_user).first()
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    contact = Contact.query.filter_by(id=contact_id, user_id=user.id).first()
+
+    if not contact:
+        return jsonify({'error': 'Contact not found'}), 404
+
+    db.session.delete(contact)
+    db.session.commit()
+
+    return jsonify({'message': 'Contact deleted successfully'}), 200
+
 if __name__ == '__main__':
     app.run(debug=True)
