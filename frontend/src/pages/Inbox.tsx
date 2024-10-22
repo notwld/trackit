@@ -1,119 +1,85 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { app, database } from "../config/firebase";
-import { collection, onSnapshot, addDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { useNavigate } from "react-router-dom";
+import { database } from "../config/firebase";
+import { collection, onSnapshot, addDoc, query, where, orderBy, getDocs, serverTimestamp } from "firebase/firestore";
 
 export default function Inbox() {
-    // const { user_id, contact_id } = useParams();
     const [contacts, setContacts] = useState([]);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
     const navigate = useNavigate();
-    const [contactMenu, setContactMenu] = useState({
+    const [selectedContact, setSelectedContact] = useState(null);
+    const [showContactMenu, setShowContactMenu] = useState({
         enabled: false,
         contactId: null
     });
-    const [selectedContact, setSelectedContact] = useState(null);
 
     useEffect(() => {
         setUser(JSON.parse(localStorage.getItem('user')));
 
-
-        const fetchContacts = async () => {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`http://127.0.0.1:5000/contacts/user/${JSON.parse(localStorage.getItem('user')).id}`, {
+        const fetchContactsFromServer = async () => {
+            const response = await fetch(`http://127.0.0.1:5000/contacts/user/${user.id}`, {
                 method: 'GET',
                 headers: {
-                    "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
+                    "Authorization": `Bearer ${localStorage.getItem('token')}`,
+                    "Content-Type": "application/json"
+                }
             });
-
+            const data = await response.json();
             if (response.ok) {
-                const data = await response.json();
-                setContacts(data);
-                console.log(data);
-
-                // Firebase collection reference
-                const contactsRef = collection(database, "contacts");
-
-                // Add contacts to Firebase (same logic you had before)
-                for (const contact of data) {
-                    const q = query(contactsRef, where("id", "==", contact.id));
+                const ref = collection(database, "contacts");
+                data.forEach(async (contact) => {
+                    const q = query(
+                        ref,
+                        where("receiver_id", "==", contact.receiver_id),
+                        where("sender_id", "==", contact.sender_id),
+                        where("userId", "==", user.id) // Only fetch contacts for the current user
+                    );
                     const querySnapshot = await getDocs(q);
-
-                    console.log(querySnapshot.docs);
-
                     if (querySnapshot.empty) {
-                        await addDoc(contactsRef, {
-                            id: contact.id,
+                        await addDoc(ref, {
+                            userId: user.id, // Store the user's ID who owns the contact
                             sender: contact.sender,
                             receiver: contact.receiver,
-                            sender_pfp: contact.sender_pfp,
                             receiver_pfp: contact.receiver_pfp,
-                            sender_id: contact.sender_id,
+                            sender_pfp: contact.sender_pfp,
                             receiver_id: contact.receiver_id,
-
-                        }).then(() => {
-                            console.log("Document successfully written!");
-                        }
-                        ).catch((error) => {
-                            console.error("Error writing document: ", error);
+                            sender_id: contact.sender_id
                         });
                     }
-                }
+                });
 
-                setSelectedContact(data[0]);
             }
         }
-
-        fetchContacts();
+        fetchContactsFromServer();
     }, []);
-    const fetchMessages = (contactId) => {
-        const messagesRef = collection(database, "messages");
-        const snapshot = getDocs(messagesRef);
-        console.log(snapshot);
-        const q = query(messagesRef,
-            orderBy("timestamp", "asc"),
-            where("receiver", "==", contactId),
-        );
 
-        // Real-time update of messages
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedMessages = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setMessages(fetchedMessages);
-        });
+    useEffect(() => {
+        const fetchContacts = async () => {
+            const contactsRef = collection(database, "contacts");
 
-        return unsubscribe;
-    };
+            const receiverQuery = query(contactsRef, where("receiver_id", "==", user.id));
+            const senderQuery = query(contactsRef, where("sender_id", "==", user.id));
+
+            const [receiverSnapshot, senderSnapshot] = await Promise.all([
+                getDocs(receiverQuery),
+                getDocs(senderQuery)
+            ]);
+
+            const contacts = [
+                ...receiverSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                ...senderSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+            ];
+
+            const uniqueContacts = Array.from(new Map(contacts.map(contact => [contact.id, contact])).values());
+
+            setContacts(uniqueContacts);
+        };
+        fetchContacts();
+    }, [user.id]);
 
 
-    const deleteContact = async (contactId) => {
-        const choice = window.confirm("Are you sure you want to delete this contact?");
-        if (choice) {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`http://127.0.0.1:5000/contacts/${contactId}`, {
-                method: 'DELETE',
-                headers: {
-                    "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-            });
-            if (response.ok) {
-                const updatedContacts = contacts.filter((contact) => contact.id !== contactId);
-                setContacts(updatedContacts);
-            }
-        }
-        setContactMenu({
-            enabled: false,
-            contactId: null
-        });
-        // setSelectedContact(null);
-    }
 
 
     const sendMessage = async () => {
@@ -121,14 +87,53 @@ export default function Inbox() {
 
         const messagesRef = collection(database, "messages");
         await addDoc(messagesRef, {
-            sender: user.id,
-            receiver: selectedContact.receiver_id,
-            content: newMessage,
-            timestamp: new Date(),
+            chatId: `${selectedContact.id}`,
+            message: newMessage,
+            senderId: user.id.toString(), // Convert senderId to string
+            receiverId: selectedContact.receiver_id.toString(), // Convert receiverId to string
+            timestamp: serverTimestamp()
         });
 
-        setNewMessage(""); 
+        setNewMessage("");
     };
+    useEffect(() => {
+        console.log(selectedContact);
+        if (selectedContact) {
+            const messagesRef = collection(database, "messages");
+            const chatId = `${selectedContact.id}`;
+
+            // Debugging: Log the generated chatId and selected contact's ID to ensure they match what you expect.
+            console.log("Generated chatId:", chatId);
+            console.log("Selected Contact ID:", selectedContact.id);
+
+            const q = query(
+                messagesRef,
+                where("chatId", "==", chatId), // Filter messages by chatId
+                orderBy("timestamp", "asc") // Order messages chronologically by timestamp
+            );
+
+            // Set up a real-time listener using onSnapshot
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    // Debugging: Log if no messages are found for the given chatId
+                    console.log("No messages found for chatId:", chatId);
+                } else {
+                    const messagesData = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+
+                    // Debugging: Log the retrieved messages for the chatId
+                    console.log("Messages for chatId:", chatId, messagesData);
+
+                    setMessages(messagesData); // Update the state with the new messages
+                }
+            });
+
+            // Clean up the listener when component unmounts or contact changes
+            return () => unsubscribe();
+        }
+    }, [selectedContact, user.id]);
 
 
     return (
@@ -140,44 +145,44 @@ export default function Inbox() {
                     {contacts.length === 0 ? (
                         <p className="text-center text-gray-500">No contacts available.</p>
                     ) : (
-                        contacts.length > 0 && contacts.map((contact) => (
+                        contacts.map((contact) => (
                             <div
                                 key={contact.id}
                                 className={`bg-white w-full shadow-md rounded-lg mb-4 cursor-pointer ${selectedContact?.id === contact.id ? 'ring-2 ring-blue-400' : ''}`}
-                                onClick={() => {
-                                    setSelectedContact(contact);
-                                    fetchMessages(contact.receiver_id);
-                                }}
+                                onClick={() => setSelectedContact(contact)}
                             >
                                 <div className="flex items-center justify-between p-4">
                                     <div className="flex items-center">
-                                        <img src={`${contact.receiver == user.full_name ? contact.sender_pfp : contact.receiver_pfp}`} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
+                                        <img
+                                            src={user.full_name === contact.sender ? contact.receiver_pfp : contact.sender_pfp}
+                                            alt="Author"
+                                            className="w-10 h-10 rounded-full ring-2 ring-white object-cover"
+                                        />
+
                                         <div className="ml-4">
-                                            <h1 className="font-semibold text-gray-800">{contact.receiver == user.full_name ? contact.sender : contact.receiver}</h1>
+                                            <h1 className="font-semibold text-gray-800">
+                                                {user.full_name === contact.sender ? contact.receiver : contact.sender}
+                                            </h1>
                                         </div>
                                     </div>
                                     <div className="relative">
-                                        <span className="text-gray-500 font-extrabold cursor-pointer tracking-wide" onClick={(e) => {
-                                            e.stopPropagation(); // Prevent click on contact from opening menu
-                                            setContactMenu({
-                                                enabled: !contactMenu.enabled,
-                                                contactId: contact.id
-                                            });
-                                        }}>
+                                        <span
+                                            className="font-extrabold text-gray-500 cursor-pointer"
+                                            onClick={() => {
+                                                setShowContactMenu({
+                                                    enabled: !showContactMenu.enabled,
+                                                    contactId: contact.id
+                                                });
+                                            }}
+                                        >
                                             ...
                                         </span>
-
-                                        {contactMenu.enabled && contactMenu.contactId === contact.id && (
-                                            <div className="absolute right-0 mt-2 w-24 bg-white border rounded-md shadow-lg z-10">
-                                                <ul className="bg-white shadow-md rounded-md">
-                                                    <li className="p-2 hover:bg-gray-100 text-red-500 cursor-pointer" onClick={() => {
-                                                        deleteContact(contact.id);
-                                                    }}>Delete</li>
-                                                </ul>
+                                        {showContactMenu.enabled && showContactMenu.contactId === contact.id && (
+                                            <div className="absolute right-0 top-8 bg-white shadow-lg rounded-md py-2 z-10">
+                                                <button className="block text-red-500 px-4 py-1 hover:bg-gray-200 w-full text-left">Delete</button>
                                             </div>
                                         )}
                                     </div>
-
                                 </div>
                             </div>
                         ))
@@ -192,22 +197,28 @@ export default function Inbox() {
                         <div>
                             <div className="text-2xl font-bold mb-4 bg-gray-100 px-4 py-6">
                                 <div className="flex items-center">
-                                    <img src={`${selectedContact.receiver == user.full_name ? selectedContact.sender_pfp : selectedContact.receiver_pfp}`} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
-                                    <h1 className="font-semibold text-gray-800 ml-4">{selectedContact.receiver == user.full_name ? selectedContact.sender : selectedContact.receiver}</h1>
+                                    <img src={user.id === selectedContact.sender_id ? selectedContact.receiver_pfp : selectedContact.sender_pfp} alt="Author" className="w-10 h-10 rounded-full ring-2 ring-white object-cover" />
+                                    <h1 className="font-semibold text-gray-800 ml-4">{user.id === selectedContact.sender_id ? selectedContact.receiver : selectedContact.sender}</h1>
                                 </div>
                             </div>
 
                             {/* Display messages */}
                             <div className="flex flex-col space-y-4 p-6 h-96 overflow-y-auto">
-                                {messages.map((msg) => (
-                                    <div
-                                        key={msg.id}
-                                        className={`${msg.user_id === user.id ? "self-end bg-blue-500 text-white" : "self-start bg-gray-200"
-                                            } p-3 rounded-md max-w-xs`}
-                                    >
-                                        <p>{msg.message}</p>
-                                    </div>
-                                ))}
+                                <div className="flex flex-col space-y-4 p-6 h-96 overflow-y-auto">
+                                    {messages.length === 0 ? (
+                                        <p className="text-center text-gray-500">No messages yet.</p>
+                                    ) : (
+                                        messages.map((msg) => (
+                                            <div
+                                                key={msg.id}
+                                                className={`${msg.senderId == user.id ? "self-end bg-blue-500 text-white" : "self-start bg-gray-200"} p-3 rounded-md max-w-xs`}
+                                            >
+                                                <p>{msg.message}</p>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
                             </div>
                         </div>
 

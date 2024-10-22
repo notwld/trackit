@@ -14,9 +14,11 @@ class User(db.Model):
     profile_pic = db.Column(db.String(255), nullable=True)
     role = db.Column(db.String(20), default='user', nullable=True)
     posts = db.relationship('Post', backref='user', lazy=True)
+    isVerified = db.Column(db.Boolean, default=False, nullable=False)
     
     # Specify that 'contacts' uses the user_id column as the foreign key
-    contacts = db.relationship('Contact', foreign_keys='Contact.user_id', backref='user', lazy=True)
+    contacts = db.relationship('Contact', foreign_keys='Contact.initiator_id', backref='initiator', lazy=True)
+    contacts_received = db.relationship('Contact', foreign_keys='Contact.recipient_id', backref='recipient', lazy=True)
 
     def set_password(self, password):
         """Hash the user's password."""
@@ -30,46 +32,14 @@ class User(db.Model):
 
 class Contact(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    
-    # Foreign key for the owner of the inbox (user who owns the contact)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  
-    
-    # Foreign key for the contact user (the other user in the conversation)
-    contact_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  
-    
-    # Each contact will have one conversation
-    conversation = db.relationship('Conversation', backref='contact', lazy=True, uselist=False)
+    initiator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    status = db.Column(db.String(20), default='INIT', nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    def __init__(self, user_id, contact_user_id):
-        self.user_id = user_id
-        self.contact_user_id = contact_user_id
-
-class Conversation(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    contact_id = db.Column(db.Integer, db.ForeignKey('contact.id'), nullable=False)
-    
-    # Each conversation will have multiple messages
-    messages = db.relationship('Message', backref='conversation', lazy=True)
-
-    started_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def __init__(self, contact_id):
-        self.contact_id = contact_id
-
-class Message(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'), nullable=False)
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Sender of the message
-    content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    sender = db.relationship('User', backref='sent_messages', lazy=True)
-
-    def __init__(self, conversation_id, sender_id, content):
-        self.conversation_id = conversation_id
-        self.sender_id = sender_id
-        self.content = content
-
+    def __init__(self, initiator_id, recipient_id):
+        self.initiator_id = initiator_id
+        self.recipient_id = recipient_id
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -129,7 +129,8 @@ export default function Home() {
     };
 
     const handleContact = async (post) => {
-
+        const choice = window.confirm('Are you sure you want to contact this user?');
+        if (!choice) return;
 
         const token = localStorage.getItem('token');
         const response = await fetch('http://127.0.0.1:5000/contact', {
@@ -139,21 +140,19 @@ export default function Home() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                user_id: user.id,
-                contact_user_id: post.user_id,
+                initiator_id: user.id,
+                receiver_id: post.user_id,
             })
 
         });
         console.log(response);
         if (response.ok) {
-            const data = await response.json();
-            navigate( `/inbox/${user.id}/${post.user_id}`);
-
+            navigate( `/inbox`);
         }
         else{
             const errorData = await response.json();
             alert(errorData.error || 'Failed to contact user');
-            navigate('/inbox');
+            // navigate('/inbox');
         }
 
     }

@@ -2,11 +2,16 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from models import db, User,Post, bcrypt,Contact,Conversation,Message
+from models import db, User,Post, bcrypt,Contact
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from datetime import timedelta
-
+from email.mime.text import MIMEText
+import threading
+from email.mime.multipart import MIMEMultipart
+import smtplib
+import random
+import time
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
@@ -24,11 +29,112 @@ jwt = JWTManager(app)
 with app.app_context():
     db.create_all()
 
+
 # Allowed extensions for profile pics
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+email_address = "mwfarrukh@gmail.com"
+email_password = "descdgxwnxypzhus"
+email_otp_data = {}
+
+def send_email(to, subject, body):
+    try:
+        if to is None:
+            raise ValueError("Recipient email address is None")
+        body = "Hi, your OTP is " + body + ". Please enter this to verify your account."
+        # Create the email message
+        message = MIMEMultipart()
+        message["From"] = email_address
+        message["To"] = to
+        message["Subject"] = subject
+
+        # Attach the body of the email
+        message.attach(MIMEText(body, "plain"))
+
+        # Connect to the SMTP server
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()  # Use TLS (Transport Layer Security)
+            server.login(email_address, email_password)
+
+            # Send the email
+            server.sendmail(email_address, to, message.as_string())
+
+        print(f"Email sent to {to} successfully.")
+        return True
+    except Exception as e:
+        print(f"Error sending email to {to}: {e}")
+        return False
+
+def generate_otp():
+    return str(random.randint(1000, 9999))
+
+def reset_otp(identifier, otp_data):
+    time.sleep(60)
+    otp_data.pop(identifier, None)
+
+@app.route("/get-email-otp", methods=["POST"])
+def get_email_otp():
+    data = request.get_json()
+    print(data)
+    user_email = data.get("email")
+
+    if user_email not in email_otp_data:
+        otp = generate_otp()
+        print(otp)
+        email_otp_data[user_email] = otp
+        res = send_email(user_email, "Email OTP Verification", otp)
+        if res:
+            print("Email sent successfully")
+            print(user_email,otp)
+            threading.Thread(
+                target=reset_otp, args=(user_email, email_otp_data), daemon=True
+            ).start()
+            return jsonify({"success": True, "otp": otp})
+        else:
+            print("Error: unable to send email")
+            return jsonify({"success": False, "message": "Unable to send email"})
+
+        # return jsonify({"success": True, "otp": otp})
+    else:
+        return jsonify(
+            {
+                "success": False,
+                "message": "Email OTP already generated. Try again after 1 minute.",
+            }
+        )
+    
+@app.route("/verify-email-otp", methods=["POST"])
+def verify_email_otp():
+    data = request.get_json()
+    user_email = data.get("email")
+    user_otp = data.get("otp")
+
+    stored_otp = email_otp_data.get(user_email)
+
+    if stored_otp and user_otp == stored_otp:
+        # email_result = send_email(
+        #     user_email, "Email OTP Verification", "Email OTP verified successfully!"
+        # )
+        # return jsonify({"success": True, "email_result": email_result})
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False, "message": "Invalid Email OTP"})
+    
+@app.route("/check-user", methods=["POST"])
+def check_user():
+    data = request.get_json()
+    email = data.get("email")
+    user = User.query.filter_by(email=email).first()
+    if user:
+        return jsonify(
+            {"success": True, "message": "User already exists"}
+        )
+    else:
+        user.isVerified = True
+        return jsonify({"success": False, "message": "User does not exist"}), 404
+
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -346,68 +452,48 @@ def create_contact():
     data = request.json
     print(data)
     try:
-        user_id = data['user_id']
-        contact_user_id = data['contact_user_id']
-        existing_contact = Contact.query.filter_by(user_id=user_id, contact_user_id=contact_user_id).first()
-        if existing_contact:
-            return jsonify({'error': 'Contact already exists'}), 400
-        
-        new_contact = Contact(user_id=user_id, contact_user_id=contact_user_id)
-        recipient = Contact(user_id=contact_user_id, contact_user_id=user_id)
-
-        
-        db.session.add(new_contact)
-        db.session.add(recipient)
-        db.session.commit()
-        
+        initiator_id = data['initiator_id']
+        recipient_id = data['receiver_id']
+        print(initiator_id,recipient_id)
+        initiator = Contact.query.filter_by(initiator_id=initiator_id, recipient_id=recipient_id).first()
+        recipient = Contact.query.filter_by(initiator_id=recipient_id, recipient_id=initiator_id).first()
+        if not initiator and not recipient:
+            new_contact = Contact(initiator_id=initiator_id, recipient_id=recipient_id)
+            db.session.add(new_contact)
+            db.session.commit()
+        else:
+            return jsonify({'error': 'Initiator or recipient already exists'}), 400
+    
         return jsonify({'message': 'Contact created successfully!'}), 201
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     
-# @app.route('/contacts', methods=['GET'])
-# @jwt_required()
-# def get_contacts():
-#     contact_list = []
-#     user = User.query.filter_by(email=get_jwt_identity()).first()
-#     contacts = Contact.query().filter_by(user_id=user.id).all()
-#     for contact in contacts:
-#         sender = User.query.filter_by(id=contact.user_id).first()
-#         receiver = User.query.filter_by(id=contact.contact_user_id).first()
-#         sender_profile_pic_url = f"http://127.0.0.1:5000/uploads/{sender.profile_pic}" if sender.profile_pic else None
-#         receiver_profile_pic_url = f"http://127.0.0.1:5000/uploads/{receiver.profile_pic}" if receiver.profile_pic else None
-        
-#         contact_list.append({
-#             'id': contact.id,
-#             'sender_id': contact.user_id,
-#             'receiver_id': contact.contact_user_id,
-#             'sender': sender.full_name,
-#             'receiver': receiver.full_name,
-#             'sender_pfp': sender_profile_pic_url,
-#             'receiver_pfp': receiver_profile_pic_url
-#         })
-#     return jsonify(contact_list), 200
+
 
 @app.route('/contacts/user/<user_id>', methods=['GET'])
 @jwt_required()
 def get_user_contacts(user_id):
-    contacts = Contact.query.filter_by(user_id=user_id).all()
+    contacts = Contact.query.filter_by(initiator_id=user_id).all()
+    contacts.extend(Contact.query.filter_by(recipient_id=user_id).all())
+    # print(contacts)
     if contacts:
         contact_list = []
         for contact in contacts:
-            sender = User.query.filter_by(id=contact.user_id).first()
-            receiver = User.query.filter_by(id=contact.contact_user_id).first()
-            sender_profile_pic_url = f"http://127.0.0.1:5000/uploads/{sender.profile_pic}" if sender.profile_pic else None
-            receiver_profile_pic_url = f"http://127.0.0.1:5000/uploads/{receiver.profile_pic}" if receiver.profile_pic else None
+            initiator = User.query.filter_by(id=contact.initiator_id).first()
+            recipient = User.query.filter_by(id=contact.recipient_id).first()
+            initiator_profile_pic_url = f"http://127.0.0.1:5000/uploads/{initiator.profile_pic}" if initiator.profile_pic else None
+            recipient_profile_pic_url = f"http://127.0.0.1:5000/uploads/{recipient.profile_pic}" if recipient.profile_pic else None
             contact_list.append({
                 'id': contact.id,
-                'sender_id': contact.user_id,
-                'receiver_id': contact.contact_user_id,
-                'sender': sender.full_name,
-                'receiver': receiver.full_name,
-                'sender_pfp': sender_profile_pic_url,
-                'receiver_pfp': receiver_profile_pic_url
+                'sender_id': contact.initiator_id,
+                'receiver_id': contact.recipient_id,
+                'sender': initiator.full_name,
+                'receiver': recipient.full_name,
+                'sender_pfp': initiator_profile_pic_url,
+                'receiver_pfp': recipient_profile_pic_url,
             })
+        print(contact_list)
         return jsonify(contact_list), 200
     if not contacts:
         return jsonify({'error': 'Contact not found'}), 404
@@ -421,7 +507,8 @@ def delete_contact(contact_id):
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    contact = Contact.query.filter_by(id=contact_id, user_id=user.id).first()
+    contact = Contact.query.filter_by(id=contact_id).first()
+
 
     if not contact:
         return jsonify({'error': 'Contact not found'}), 404

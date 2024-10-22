@@ -29,7 +29,7 @@ const Signup = () => {
     if (response.ok) {
       localStorage.setItem('token', data.access_token); // replace with actual token from the response
       if(data.role=='user'||data.role!='seller'||data.role!='buyer'){
-        navigate('/role_selection');
+        navigate('/otp', { state: { email } });
         return
       }
       navigate('/home');

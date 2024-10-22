@@ -13,6 +13,7 @@ import './index.css';
 import RoleSelection from './pages/RoleSelection';
 import Profile from './pages/Profile';
 import Inbox from './pages/Inbox';
+import EmailVerification from './pages/EmailVerify';
 
 const router = createBrowserRouter([
   {
@@ -26,6 +27,10 @@ const router = createBrowserRouter([
       {
         path: "signup",
         element: <Signup />,  
+      },
+      {
+        path: "otp",
+        element: <EmailVerification />,  
       },
       {
         path: "role_selection",
