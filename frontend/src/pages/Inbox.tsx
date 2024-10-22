@@ -32,14 +32,13 @@ export default function Inbox() {
                 data.forEach(async (contact) => {
                     const q = query(
                         ref,
-                        where("receiver_id", "==", contact.receiver_id),
-                        where("sender_id", "==", contact.sender_id),
-                        where("userId", "==", user.id) // Only fetch contacts for the current user
+                        where("receiver", "==", contact.receiver),
+                        where("sender", "==", contact.sender)
                     );
                     const querySnapshot = await getDocs(q);
                     if (querySnapshot.empty) {
                         await addDoc(ref, {
-                            userId: user.id, // Store the user's ID who owns the contact
+                            userId: user.id,
                             sender: contact.sender,
                             receiver: contact.receiver,
                             receiver_pfp: contact.receiver_pfp,
@@ -49,7 +48,6 @@ export default function Inbox() {
                         });
                     }
                 });
-
             }
         }
         fetchContactsFromServer();
