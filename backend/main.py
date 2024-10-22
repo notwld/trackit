@@ -200,11 +200,40 @@ def login():
     else:
         return jsonify({'error': 'Invalid email or password'}), 401
 
+@app.route('/profile/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_profile(user_id):
+    user = User.query.filter_by(id=user_id).first()
+    profile_pic_url = f"http://127.0.0.1:5000/uploads/{user.profile_pic}" if user.profile_pic else None
+    posts = []
+    for post in user.posts:
+        posts.append({
+            'id': post.id,
+            'title': post.title,
+            'description': post.description,
+            'source': post.source,
+            'destination': post.destination,
+            'space': post.space,
+            'date': post.date.strftime('%Y-%m-%d'),
+            'author': user.full_name,
+            'profile_pic': profile_pic_url
+        })
+    if user:
+        return jsonify({
+            'id': user.id,
+            'full_name': user.full_name,
+            'email': user.email,
+            'profile_pic': profile_pic_url,
+            'role': user.role,
+            'posts': posts
+        }), 200
+    else:
+        return jsonify({'error': 'User not found'}), 404
 @app.route('/profile', methods=['GET'])
 @jwt_required()
-def get_profile():
-    current_user = get_jwt_identity()
-    user = User.query.filter_by(email=current_user).first()
+def get_user_profile():
+    user_id = get_jwt_identity()
+    user = User.query.filter_by(email=user_id).first()
     profile_pic_url = f"http://127.0.0.1:5000/uploads/{user.profile_pic}" if user.profile_pic else None
     posts = []
     for post in user.posts:

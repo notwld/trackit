@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const Profile = () => {
+    const {profileId} = useParams();
     const [profileData, setProfileData] = useState(null);
     const [posts, setPosts] = useState([]);
     const [error, setError] = useState('');
@@ -24,7 +25,7 @@ const Profile = () => {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const response = await fetch('http://127.0.0.1:5000/profile', {
+                const response = await fetch(`http://127.0.0.1:5000/profile/${profileId}`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -159,6 +160,7 @@ const Profile = () => {
                        <input
                            type="text"
                            value={fullName}
+                           disabled={profileId == user.id}
                            onChange={(e) => setFullName(e.target.value)}
                            className="w-full px-3 py-2 border rounded"
                        />
@@ -167,9 +169,11 @@ const Profile = () => {
                        <label className="block mb-1">Email</label>
                        <input
                            type="email"
+                           disabled={user.id !== profileData.id}
+
                            value={email}
                            className="w-full px-3 py-2 border rounded"
-                           disabled
+                           disabled={profileId == user.id}
                        />
                    </div>
                    <div className="mb-4">
@@ -180,42 +184,48 @@ const Profile = () => {
                            className="w-full px-3 py-2 border rounded"
                            disabled
                        /> */}
-                       <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 border rounded">
+                       <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 border rounded" disabled={profileId == user.id}>
                             <option value="buyer">Buyer</option>
                             <option value="seller">Seller</option>
                         </select>
                    </div>
-                   <div className="mb-4">
-                       <label className="block mb-1">New Password</label>
-                       <input
-                           type="password"
-                           value={password}
-                           onChange={(e) => setPassword(e.target.value)}
-                           className="w-full px-3 py-2 border rounded"
-                       />
-                   </div>
-                   <div className="mb-4">
-                       <label className="block mb-1">Confirm Password</label>
-                       <input
-                           type="password"
-                           value={confirmPassword}
-                           onChange={(e) => setConfirmPassword(e.target.value)}
-                           className="w-full px-3 py-2 border rounded"
-                       />
-                   </div>
-                   <button
+                  {user.id === profileId && (
+                     <>
+                     <div className="mb-4">
+                     <label className="block mb-1">New Password</label>
+                     <input
+                         type="password"
+                         value={password}
+                         onChange={(e) => setPassword(e.target.value)}
+                         className="w-full px-3 py-2 border rounded"
+                     />
+                 </div>
+                 <div className="mb-4">
+                     <label className="block mb-1">Confirm Password</label>
+                     <input
+                         type="password"
+                         value={confirmPassword}
+                         onChange={(e) => setConfirmPassword(e.target.value)}
+                         className="w-full px-3 py-2 border rounded"
+                     />
+                 </div>
+                 <button
                        type="submit"
                        className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
                    >
                        Update Profile
                    </button>
-               </form>
-               <button
+                   <button
                    onClick={handleDeleteProfile}
                    className="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600 mt-4"
                >
                    Delete Profile
                </button>
+                 </>
+                  )}
+                   
+               </form>
+               
                {message && <p className="mt-4 text-center text-green-500">{message}</p>}
            </div>
            <div className="ml-5 p-6">

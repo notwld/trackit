@@ -10,6 +10,9 @@ const App = () => {
     if (token) {
       navigate('/home');  
     }
+    else{
+      navigate('/login');
+    }
   }, []);
 
   return (

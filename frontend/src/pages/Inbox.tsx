@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { database } from "../config/firebase";
-import { collection, onSnapshot, addDoc, query, where, orderBy, getDocs, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, query, where, orderBy, getDocs, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
 
 export default function Inbox() {
     const [contacts, setContacts] = useState([]);
@@ -52,6 +52,26 @@ export default function Inbox() {
         }
         fetchContactsFromServer();
     }, []);
+
+    const deleteContact = async (contactId) => {
+        const contactRef = collection(database, "contacts");
+        await deleteDoc(doc(contactRef, contactId)).then(() => {
+            console.log("Document successfully deleted!");
+            setContacts(contacts.filter(contact => contact.id !== contactId));
+            setSelectedContact(null);
+        }
+        );
+    }
+
+    const deleteMessage = async (messageId) => {
+        const messageRef = collection(database, "messages");
+        await deleteDoc(doc(messageRef, messageId)).then(() => {
+            console.log("Document successfully deleted!");
+            setMessages(messages.filter(message => message.id !== messageId));
+        }
+        );
+    }
+
 
     useEffect(() => {
         const fetchContacts = async () => {
@@ -177,7 +197,9 @@ export default function Inbox() {
                                         </span>
                                         {showContactMenu.enabled && showContactMenu.contactId === contact.id && (
                                             <div className="absolute right-0 top-8 bg-white shadow-lg rounded-md py-2 z-10">
-                                                <button className="block text-red-500 px-4 py-1 hover:bg-gray-200 w-full text-left">Delete</button>
+                                                <button className="block text-red-500 px-4 py-1 hover:bg-gray-200 w-full text-left"
+                                                    onClick={() => deleteContact(contact.id)}
+                                                >Delete</button>
                                             </div>
                                         )}
                                     </div>
@@ -211,7 +233,20 @@ export default function Inbox() {
                                                 key={msg.id}
                                                 className={`${msg.senderId == user.id ? "self-end bg-blue-500 text-white" : "self-start bg-gray-200"} p-3 rounded-md max-w-xs`}
                                             >
-                                                <p>{msg.message}</p>
+                                                <div>
+                                                    <div className="flex justify-between items-center">
+                                                    <p>{msg.message}</p>
+                                                        {msg.senderId == user.id && (
+                                                            <span
+                                                                className="font-extralight text-white cursor-pointer text-xs"
+                                                                onClick={() => deleteMessage(msg.id)}
+                                                            >
+                                                                Delete
+                                                            </span>
+                                                        )}
+                                                        </div>  
+                                                </div>
+                                                <span className="text-xs text-white">{new Date(msg.timestamp?.toDate()).toLocaleString()}</span>
                                             </div>
                                         ))
                                     )}
